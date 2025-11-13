@@ -3,7 +3,18 @@
   "compatibility_date": "2025-11-13",
   "main": "_worker.js",
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
   },
   "vars": {
     "UUID": "320c7ec2-d115-4f6a-a56c-23aff72de3eb"
