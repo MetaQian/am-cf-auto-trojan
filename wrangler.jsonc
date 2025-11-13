@@ -4,5 +4,8 @@
   "main": "_worker.js",
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "UUID": "320c7ec2-d115-4f6a-a56c-23aff72de3eb"
   }
 }
