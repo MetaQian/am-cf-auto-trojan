@@ -638,301 +638,72 @@ const TELEGRAM_API_URL = 'https://api.telegram.org/bot';
  * @param {string} ip I
  * @param {string} [add_data=""] 
  */
-// 添加超时辅助函数
-function timeoutPromise(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`Timeout after ${ms}ms`));
-    }, ms);
-    promise
-      .then((value) => {
-        clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch((reason) => {
-        clearTimeout(timeoutId);
-        reject(reason);
-      });
-  });
-}
-
-// 修改sendMessage函数，使其异步执行且不阻塞主流程
 async function sendMessage(type, ip, add_data = "") {
-  // 使用异步函数但不等待其完成，直接返回
-  if (botToken && chatID) {
-    // 使用IIFE执行异步操作而不阻塞主流程
-    (async () => {
-      try {
-        // 添加超时控制
-        const ipResponse = await timeoutPromise(
-          fetch(`${API_URL}${ip}?lang=zh-CN`), 
-          2000
-        );
-        let msg = `${type}\nIP: ${ip}\n${add_data}`;
-
-        if (ipResponse.ok) {
-          const ipInfo = await ipResponse.json();
-          msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
-        }
-
-        const telegramUrl = `${TELEGRAM_API_URL}${botToken}/sendMessage`;
-        const params = new URLSearchParams({
-          chat_id: chatID,
-          parse_mode: 'HTML',
-          text: msg
-        });
-
-        await timeoutPromise(
-          fetch(`${telegramUrl}?${params.toString()}`, {
-            method: 'GET',
-            headers: {
-              'Accept': 'text/html,application/xhtml+xml,application/xml',
-              'Accept-Encoding': 'gzip, deflate, br',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.72 Safari/537.36'
-            }
-          }),
-          3000
-        );
-      } catch (error) {
-        console.error('Error sending message:', error);
-      }
-    })();
-  }
-}
-
-// 修改getIpUrlTxt函数，添加更严格的超时控制
-async function getIpUrlTxt(ipUrlTxts) {
-  if (!ipUrlTxts || ipUrlTxts.length === 0) {
-    return [];
-  }
-
-  let ipTxt = "";
-
-  // 设置更短的超时时间
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, 1500);
-
-  try {
-    // 限制并发请求数量
-    const maxConcurrent = 2;
-    const chunks = [];
-    for (let i = 0; i < ipUrlTxts.length; i += maxConcurrent) {
-      chunks.push(ipUrlTxts.slice(i, i + maxConcurrent));
-    }
-
-    // 分批次处理请求
-    for (const chunk of chunks) {
-      const responses = await Promise.allSettled(
-        chunk.map(apiUrl => 
-          timeoutPromise(
-            fetch(apiUrl, {
-              method: 'GET',
-              headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;',
-                'User-Agent': 'amclubs/am-cf-tunnel'
-              },
-              signal: controller.signal
-            }).then(response => response.ok ? response.text() : Promise.reject()),
-            1000 // 每个请求1秒超时
-          )
-        )
-      );
-
-      for (const response of responses) {
-        if (response.status === 'fulfilled') {
-          try {
-            const content = await response.value;
-            ipTxt += content + '\n';
-          } catch (e) {
-            console.error('Error processing response:', e);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error in getIpUrlTxt:', error);
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  try {
-    const newIpTxt = await addIpText(ipTxt);
-    return newIpTxt;
-  } catch (e) {
-    console.error('Error processing IP text:', e);
-    return [];
-  }
-}
-
-// 修改getSubscribeNode函数，优化外部API调用
-async function getSubscribeNode(userAgent, _url, host, fakeHostName, fakeUserID, noTLS, ipUrlTxt, ipUrlCsv) {
-  try {
-    // 优先处理本地数据，快速返回基础响应
-    const uniqueIpTxt = [...new Set([...ipLocal, ...ipUrlTxt, ...ipUrlCsv])];
-    let responseBody = splitNodeData(uniqueIpTxt, noTLS, fakeHostName, fakeUserID, userAgent);
-
-    // 对于特殊情况，只在必要时进行额外的外部调用
-    if (!userAgent.includes(('CF-FAKE-UA').toLowerCase())) {
-      if (isClashCondition(userAgent, _url) || isSingboxCondition(userAgent, _url)) {
-        // 只在需要时修改配置
-        isBase64 = false;
-        const target = isClashCondition(userAgent, _url) ? 'clash' : 'singbox';
-        const url = createSubConverterUrl(target, `https://${host}/${fakeUserID}`, subConfig, subConverter, subProtocol);
-        
+    if (botToken && chatID) {
         try {
-          // 添加超时控制，避免长时间等待
-          const response = await timeoutPromise(
-            fetch(url, {
-              headers: {
-                'User-Agent': `${userAgent} am-cf-tunnel/amclubs`
-              }
-            }),
-            3000 // 3秒超时
-          );
-          if (response.ok) {
-            responseBody = await response.text();
-          }
+            const ipResponse = await fetch(`${API_URL}${ip}?lang=zh-CN`);
+            let msg = `${type}\nIP: ${ip}\n${add_data}`;
+
+            if (ipResponse.ok) {
+                const ipInfo = await ipResponse.json();
+                msg = `${type}\nIP: ${ip}\n国家: ${ipInfo.country}\n城市: ${ipInfo.city}\n组织: ${ipInfo.org}\nASN: ${ipInfo.as}\n${add_data}`;
+            } else {
+                console.error(`Failed to fetch IP info. Status: ${ipResponse.status}`);
+            }
+
+            const telegramUrl = `${TELEGRAM_API_URL}${botToken}/sendMessage`;
+            const params = new URLSearchParams({
+                chat_id: chatID,
+                parse_mode: 'HTML',
+                text: msg
+            });
+
+            await fetch(`${telegramUrl}?${params.toString()}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.72 Safari/537.36'
+                }
+            });
+
         } catch (error) {
-          console.error('Error in subconverter call:', error);
-          // 出错时使用本地生成的配置，不中断流程
+            console.error('Error sending message:', error);
         }
-      }
+    } else {
+        console.warn('botToken or chatID is missing.');
     }
-
-    return responseBody;
-  } catch (error) {
-    console.error('Error in getSubscribeNode:', error);
-    // 出错时返回基本配置，避免完全失败
-    return btoa('');
-  }
 }
 
-// 修改fetch主函数，添加超时控制和错误处理
-addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request, event.env));
-});
 
-async function handleRequest(request, env) {
-  try {
-    // 添加整体请求超时控制
-    return await timeoutPromise(
-      (async () => {
-        // 现有代码...
-        const { TOKEN, HOST, PASSWORD, DNS_RESOLVER_URL, IP_LOCAL, IP_URL_TXT, IP_URL_CSV, NO_TLS, SL, SUB_CONFIG, SUB_CONVERTER, SUB_NAME, TG_TOKEN, TG_ID } = env;
-        
-        userID = (TOKEN || userID).toLowerCase();
-        const url = new URL(request.url);
-        dohURL = (DNS_RESOLVER_URL || dohURL);
-        
-        // 异步加载IP数据但不阻塞初始响应
-        let ipLocalData = ipLocal;
-        let ipUrlTxtData = [];
-        let ipUrlCsvData = [];
-        
-        try {
-          if (IP_LOCAL) ipLocalData = await addIpText(IP_LOCAL);
-          // 并行获取IP数据
-          [ipUrlTxtData, ipUrlCsvData] = await Promise.all([
-            IP_URL_TXT ? getIpUrlTxt(await addIpText(IP_URL_TXT)) : [],
-            IP_URL_CSV ? getIpUrlCsv('FALSE') : []
-          ]);
-        } catch (e) {
-          console.error('Error loading IP data:', e);
-          // 使用默认数据继续
-        }
-        
-        noTLS = (NO_TLS || noTLS);
-        sl = (SL || sl);
-        subConfig = (SUB_CONFIG || subConfig);
-        subConverter = (SUB_CONVERTER || subConverter);
-        fileName = (SUB_NAME || subConverter);
-        botToken = (TG_TOKEN || botToken);
-        chatID = (TG_ID || chatID);
-        
-        // 简化协议处理
-        const [subProtocol, subConverterWithoutProtocol] = (subConverter.startsWith("http://") || subConverter.startsWith("https://"))
-          ? subConverter.split("://")
-          : [undefined, subConverter];
-        subConverter = subConverterWithoutProtocol;
-        
-        const ua = request.headers.get('User-Agent') || 'null';
-        const userAgent = ua.toLowerCase();
-        const host = (url.searchParams.get('host') || HOST || request.headers.get('Host'));
-        const password = (url.searchParams.get('password') || PASSWORD || userID);
-        
-        // 计算过期信息
-        const expire = Math.floor(timestamp / 1000);
-        
-        fakeUserID = await getFakeUserID(userID);
-        fakeHostName = fakeUserID.slice(6, 9) + "." + fakeUserID.slice(13, 19);
-        
-        // 处理不同路由
-        switch (url.pathname.toLowerCase()) {
-          case '/': {
-            return new Response(await nginx(), {
-              headers: {
-                'Content-Type': 'text/html; charset=UTF-8',
-                'referer': 'https://www.google.com/search?q=am.809098.xyz',
-              },
-            });
-          }
+/** -------------------Home page-------------------------------- */
+async function nginx() {
+    const text = `
+	<!DOCTYPE html>
+	<html>
+	<head>
+	<title>Welcome to nginx!</title>
+	<style>
+		body {
+			width: 35em;
+			margin: 0 auto;
+			font-family: Tahoma, Verdana, Arial, sans-serif;
+		}
+	</style>
+	</head>
+	<body>
+	<h1>Welcome to nginx!</h1>
+	<p>If you see this page, the nginx web server is successfully installed and
+	working. Further configuration is required.</p>
 
-          case `/${fakeUserID}`: {
-            // 快速生成伪装配置
-            const fakeConfig = await getTROJANConfig(userID, host, 'CF-FAKE-UA', url);
-            return new Response(fakeConfig, { status: 200 });
-          }
+	<p>For online documentation and support please refer to
+	<a href="http://nginx.org/">nginx.org</a>.<br/>
+	Commercial support is available at
+	<a href="http://nginx.com/">nginx.com</a>.</p>
 
-          case `/${userID}`: {
-            // 异步发送消息，不阻塞响应
-            sendMessage(
-              `#获取订阅 ${fileName}`,
-              request.headers.get('CF-Connecting-IP'),
-              `UA: ${userAgent}\n域名: ${url.hostname}\n入口: ${url.pathname + url.search}`
-            );
-
-            // 生成配置并返回
-            const trojanConfig = await getTROJANConfig(password, host, userAgent, url);
-            const isMozilla = userAgent.includes('mozilla');
-            
-            const commonHeaders = {
-              "Content-Type": isMozilla ? "text/html;charset=utf-8" : "text/plain;charset=utf-8",
-              "Profile-Update-Interval": `${subUpdateTime}`,
-              "Subscription-Userinfo": `upload=${upload}; download=${download}; total=${total}; expire=${expire}`,
-            };
-
-            if (!isMozilla) {
-              commonHeaders["Content-Disposition"] = `attachment; filename=${fileName}; filename*=utf-8''${encodeURIComponent(fileName)}`;
-            }
-
-            return new Response(trojanConfig, {
-              status: 200,
-              headers: commonHeaders,
-            });
-          }
-
-          default: {
-            return new Response(await nginx(), {
-              headers: {
-                'Content-Type': 'text/html; charset=UTF-8',
-                'referer': 'https://www.google.com/search?q=am.809098.xyz',
-              },
-            });
-          }
-        }
-      })(),
-      8000 // 8秒整体超时，留出缓冲时间
-    );
-  } catch (err) {
-    console.error('Error processing request:', err);
-    // 返回友好的错误响应
-    return new Response(`Error: ${err.message || 'Internal server error'}`, {
-      status: 500,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8'
-      }
-    });
-  }
+	<p><em>Thank you for using nginx.</em></p>
+	</body>
+	</html>
+	`
+    return text;
 }
