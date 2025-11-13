@@ -1,5 +1,8 @@
 {
   "name": "am-cf-auto-trojan",
   "compatibility_date": "2025-11-13",
-  "main": "_worker.js"
+  "main": "_worker.js",
+  "observability": {
+    "enabled": true
+  }
 }
